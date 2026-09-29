@@ -1,0 +1,36 @@
+.env
+*.env.local
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+*.egg-info/
+backend/var/
+backend/eval-*.json
+node_modules/
+.next/
+frontend/next-env.d.ts
+*.tsbuildinfo
+.DS_Store
+
+# CPT content is AMA-licensed: never commit it
+data_sources/cpt*.csv
+backend/var/
+
+# local / secrets
+.env.*
+!.env.example
+*.db
+.venv/
+venv/
+.vscode/
+backend/var/
+
+# local / secrets
+.env.*
+!.env.example
+*.db
+.venv/
+venv/
+.vscode/
