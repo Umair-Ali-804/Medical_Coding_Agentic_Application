@@ -1,160 +1,246 @@
-# Medical Coding AI: pre-bill coding and claim-integrity assistant
+<div align="center">
 
-**Clinical note → evidence-backed ICD-10-CM diagnoses + CPT/HCPCS/ICD-10-PCS procedures → official-guideline citations → deterministic validation → calibrated confidence → coder approval → draft claim → pre-bill denial check (MUE, NCCI, modifiers, validity on the date of service...) → audited export.**
+<img src="backend/app/demo/assets/logo_full.png" alt="AAXIS AI Automations" width="220">
 
-Real-world goal: fewer denials, less coder time per chart, fewer missed charges, and every code traceable to documentation and guidelines. See **[docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md)** (problem, solution, results, KPIs, roadmap) and **[docs/DATA_SOURCES.md](docs/DATA_SOURCES.md)** (data you have, data missing, where to get it).
+# Medical Coding Intelligence
 
-**Run it on Google Colab:** [colab/COLAB_COMMANDS.md](colab/COLAB_COMMANDS.md) / `colab/MedicalCodingAI_Colab.ipynb`.
+### From clinical note to a clean claim, with every suggestion checked against the documentation.
 
-The LLM never has the last word. Every suggestion is grounded in retrieved official reference text, checked by a rule engine that cannot hallucinate, scored by the platform (not by the model's self-reported confidence), and approved, edited or rejected by a human coder. Every step is versioned and written to a tamper-evident audit trail.
+AI-assisted medical coding and pre-bill claim integrity platform by **AAXIS AI Automations**
+
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?logo=fastapi&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-Review%20UI-000000?logo=nextdotjs&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-77%20passing-2ea44f)
+![Code sets](https://img.shields.io/badge/ICD--10--CM%20%C2%B7%20PCS%20%C2%B7%20HCPCS%20%C2%B7%20CPT-FY2026-555)
+
+[Overview](#overview) · [Screenshots](#screenshots) · [How it works](#how-it-works) · [Results](#evaluation-results) · [Quick start](#quick-start) · [Contact](#contact)
+
+</div>
+
+---
+
+## Overview
+
+Claim denials rarely come from complex medicine. They come from details: an incomplete diagnosis code, units above the Medicare limit, a missing modifier, or a code set that expired last quarter. Each error costs a resubmission, an appeal, or revenue that is never recovered.
+
+**Medical Coding Intelligence** closes the gap between clinical documentation and a clean claim:
+
+1. **Reads the clinical note** and identifies conditions and procedures, recognizing negation, uncertainty and family history.
+2. **Suggests codes** across ICD-10-CM, HCPCS, CPT and ICD-10-PCS, each checked against a verbatim quote from the note.
+3. **Cites the most relevant Official Coding Guideline passage** for each code.
+4. **Validates every suggestion** with a deterministic rule engine and a platform-computed confidence score.
+5. **Drafts the claim** and runs a **pre-bill denial check** before submission, mapping each finding to the payer denial code it would trigger.
+6. **Routes everything to a certified coder**, who approves, edits or rejects each code, with a complete audit trail.
+
+> **Design principle: the AI proposes, a coder decides.** Suggestions are grounded in official reference text, verified by rules that cannot hallucinate, scored by the platform rather than by the model's self-reported confidence, and approved by a human. Every step is versioned and written to a tamper-evident audit log.
+
+### Who it is for
+Medical billing companies, physician practices, clinics and revenue cycle management (RCM) teams that want **fewer denials, faster coding and fewer missed charges**.
+
+---
+
+## Screenshots
+
+<table>
+<tr>
+<td width="50%"><img src="screen_shorts/AAXIS_Medical_Coding_04.png" alt="Evidence-backed code suggestions"><br><sub><b>Code a note:</b> diagnoses and procedures with verbatim evidence, confidence and validation status</sub></td>
+<td width="50%"><img src="screen_shorts/AAXIS_Medical_Coding_05.png" alt="Pre-bill claim scrubber"><br><sub><b>Claim scrubber:</b> denial risks mapped to payer reason codes, with fixes and rule sources</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="screen_shorts/AAXIS_Medical_Coding_01.png" alt="Workbench overview"><br><sub><b>Workbench:</b> paste a clinical note and review codes, the draft claim and the denial check on one screen</sub></td>
+<td width="50%"><img src="screen_shorts/AAXIS_Medical_Coding_07.png" alt="Branded PDF reports"><br><sub><b>Reports:</b> one-click branded PDFs for coders, auditors and billing teams</sub></td>
+</tr>
+</table>
+
+---
+
+## Key capabilities
+
+| | Capability | What it delivers |
+|---|---|---|
+| 🩺 | **Clinical understanding** | Section-aware NLP with ConText/NegEx assertion detection: negated, uncertain, historical, family and hypothetical findings are never coded as current conditions |
+| 🔎 | **Evidence-backed coding** | Hybrid retrieval (dense embeddings + BM25) over the official code sets; every suggestion is checked against a verbatim quote from the note, and unsupported quotes are flagged |
+| 📘 | **Guideline citations** | ICD-10-CM and ICD-10-PCS Official Guidelines indexed into citable passages (for example `I.C.4.a`, `B3.1b`); the most relevant passages are attached to each code for the coder to review |
+| ⚙️ | **Procedure coding** | CPT/HCPCS for outpatient and ICD-10-PCS for inpatient encounters, only for procedures documented as performed; drug units derived from the documented dose. Procedure suggestions always go to coder review |
+| ✅ | **Deterministic validation** | Code existence and billability on the date of service, verbatim-evidence check, Excludes1 conflicts, laterality, sex/age edits, manifestation sequencing, duplicates |
+| 🛡️ | **Pre-bill claim scrubber** | 30+ rule checks (CMS MUE unit limits, modifier logic, E/M + modifier 25, HCPCS coverage and termination, diagnosis validity, sequencing, sex/age edits, diagnosis pointers; NCCI bundling, medical necessity and dollars at risk when those CMS/payer files are loaded), each with the typical CARC/RARC, a fix and a risk score |
+| 📄 | **PDF reports** | Branded coding reports, claim-check reports and code reference sheets |
+| 🔐 | **Security & audit** | RBAC, encrypted PHI at rest, hashed API keys, hash-chained audit log, PHI-free logs |
+
+---
+
+## How it works
 
 ```mermaid
 flowchart LR
-    UI[Next.js review UI] -->|BFF proxy, httpOnly session| API
-    N8N[n8n orchestrator] -->|X-API-Key, service role| API
+    UI[Review UI / Workbench] -->|session| API
+    N8N[n8n orchestrator] -->|API key| API
     subgraph API[FastAPI service]
-      ING[Ingestion<br/>PDF/DOCX/TXT, cleaning, sections] --> NLP[Clinical NLP<br/>lexicon + problem list + LLM<br/>ConText negation/uncertainty/family]
-      NLP --> RAG[Hybrid RAG<br/>Qdrant dense + BM25, RRF]
-      RAG --> LLM[OpenRouter LLM<br/>strict JSON schema]
-      LLM --> VAL[Validation engine<br/>exists, billable, evidence, negation,<br/>Excludes1, laterality, sex/age...]
-      VAL --> CONF[Confidence + routing]
+      ING[Ingestion<br/>PDF · DOCX · TXT<br/>cleaning · sections] --> NLP[Clinical NLP<br/>lexicon · problem list · LLM<br/>ConText negation]
+      NLP --> RAG[Hybrid retrieval<br/>dense + BM25 · RRF]
+      RAG --> LLM[Coding model<br/>LLM strict JSON or<br/>deterministic coder]
+      LLM --> VAL[Validation engine<br/>evidence · Excludes1 ·<br/>laterality · sex/age]
+      VAL --> CONF[Confidence<br/>+ routing]
+      CONF --> SCRUB[Claim scrubber<br/>MUE · NCCI · modifiers ·<br/>CARC mapping]
     end
-    API --> PG[(PostgreSQL<br/>encrypted PHI, audit chain, job queue)]
-    RAG --> QD[(Qdrant)]
+    API --> PG[(PostgreSQL<br/>encrypted PHI · audit chain · job queue)]
+    RAG --> QD[(Vector store)]
     WORKER[Worker replicas] --> PG
     API -. signed webhooks .-> N8N
 ```
 
-![Review workspace: highlighted clinical text with negated findings struck through, evidence-linked ICD-10-CM suggestions with validation status and platform confidence](docs/screenshots/review-workspace.png)
+---
 
-## What's in the box
+## Evaluation results
 
-| Area | Implementation |
+Measured on a **synthetic benchmark** (36 clinical notes, 71 gold ICD-10-CM codes) using the deterministic retrieval-only coder with lexical retrieval and no LLM. The held-out test split (12 notes, 25 gold codes) was run once, after all tuning on the dev and validation splits. With a small test set, results can vary noticeably on new data.
+
+| Split | Precision | Recall | F1 | Category F1 | Exact match | Unsupported codes | Retrieval recall |
+|---|---|---|---|---|---|---|---|
+| Dev (tuned) | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 0% | 100% |
+| Validation | 0.88 | 0.88 | 0.88 | 0.96 | 0.83 | 0% | 96% |
+| **Test (held out)** | **0.92** | **0.96** | **0.94** | **1.00** | **0.92** | **0%** | **100%** |
+
+| Claim scrubber (26 labeled test claims) | Result |
 |---|---|
-| Ingestion | PDF (text layer), DOCX, TXT, magic-byte type detection, size limits, scanned-PDF detection with an OCR provider interface, text normalization, clinical section detection (SOAP, H&P, discharge summary, op note) |
-| Clinical NLP | Curated lexicon (~390 terms, abbreviation-safe), problem-list parser with combination-diagnosis handling, **ConText/NegEx** assertion engine (negated, uncertain, historical, family, hypothetical), laterality/severity/temporal modifiers, optional LLM extraction reconciled against ConText (disagreements are flagged, never silently resolved) |
-| Knowledge base | **Official CDC ICD-10-CM FY2026 tabular** (98,262 codes, 74,795 billable) with 7th-character expansion and inherited instructional notes (Excludes1/2, code first, use additional code). HCPCS Level II loader (CMS file). CPT loader gated behind an explicit AMA-license acknowledgement; no CPT content is shipped |
-| RAG | Qdrant dense retrieval (local ONNX `bge-small-en-v1.5`, baked into the image) + in-process BM25, reciprocal rank fusion, coding-convention priors (NOS over NEC, chapter/episode guards) |
-| LLM | OpenRouter, strict `json_schema` output, Pydantic validation with one repair round, retries with backoff, cost/token accounting, `data_collection: deny` provider routing, versioned prompts, optional second model for agreement scoring |
-| Validation | Code exists (and in which version), billable, verbatim evidence (anti-hallucination), negation/uncertainty/family contradictions, NLP-vs-LLM assertion conflicts, Excludes1 conflicts, unspecified-with-specific, laterality mismatch, sex/age edits, manifestation sequencing, duplicates, unlicensed code systems, use-additional-code hints |
-| Confidence | Platform score from evidence, retrieval, validation, entity match, model agreement and (low-weight) LLM self-report; weights and review threshold **fitted on a validation split**, not guessed |
-| Review | Approve / edit (with KB search) / reject with reason + error category / add missed code / finalize / admin reopen. Only human coders can approve; integrations cannot |
-| Traceability | `model_runs` record provider, model, prompt version, retrieval version, KB version, tokens, cost, latency. `reviews` record original vs. final code and error category |
-| Security | JWT + RBAC (admin, coder, auditor, service), API keys (hashed), bcrypt, login rate limiting, Fernet encryption of all PHI columns and stored files with key rotation, hash-chained audit log with a DB trigger that forbids UPDATE/DELETE, PHI-free logs and webhooks, SSRF-safe callbacks, security headers, production config guard |
-| Operations | Postgres job queue (`SKIP LOCKED`, retries, stale-lock recovery), horizontally scalable workers, Prometheus metrics, JSON logs with request IDs, health/readiness probes, Alembic migrations |
-| Reference data | `kb load-all` loads the official CMS/CDC files as published: ICD-10-CM order/codes files (validity authority), ICD-10-PCS, HCPCS ANWEB fixed-width (+ modifiers, coverage codes, termination dates, processing notes), NCCI MUE, NCCI PTP, CPT CSV (licensed), fee schedule, LCD/NCD coverage crosswalk, Official Guidelines PDFs. Every set has a validity window; `kb freshness` warns before it expires |
-| Procedures | CPT/HCPCS (outpatient) and ICD-10-PCS (inpatient) suggestions for procedures documented as performed; drug units inferred from documented dose |
-| Guidelines RAG | ICD-10-CM and ICD-10-PCS Official Guidelines split into citable passages (`I.C.4.a`, `B3.1b`...), attached to each suggestion and given to the LLM |
-| Claim scrubber | 30+ deterministic pre-bill rules with typical CARC/RARC, fix and source; risk score and dollars at risk (`POST /api/v1/claims/scrub`, `GET /api/v1/documents/{id}/claim-check`, `python -m app.cli claims scrub`) |
-| Workbench | AAXIS AI-branded web UI (custom HTML/CSS on Gradio, dark graphite + silver theme, mobile friendly) for Colab/pilots: code a note, scrub a claim, code lookup (with MUE/notes/Excludes), guideline search, reference-data status. **Download branded PDF reports** of coded notes, claim checks and code sheets |
-| Evaluation | 4 baselines from the plan (LLM only → +RAG → +validation → full) plus a no-LLM retrieval baseline, precision/recall/F1, category F1, exact match, unsupported-code rate, retrieval recall, auto-accept precision, latency, cost, error taxonomy, threshold calibration |
-| Automation | n8n workflows: document intake (webhook → upload → process → route → alert → respond) and platform events (HMAC-verified → finalized-code export / failure alerts) |
+| Expected errors detected | **22 / 22 (100%)** |
+| False alarms on clean claims | **0** |
+| End-to-end time per note (codes, claim check and PDF, offline coder) | **≈ 3 seconds** |
 
-## Quick start (Docker)
+> These results come from synthetic data and are not a guarantee of real-world accuracy. Accuracy on real documentation is established per client through a pilot on de-identified charts. The LLM baselines (LLM only → + RAG → + validation → full pipeline) are supported by the evaluation runner, require an OpenRouter key, and have not yet been benchmarked. With an LLM enabled, processing time per note increases (typically tens of seconds, depending on the model).
+
+Full methodology and error analysis: [docs/evaluation.md](docs/evaluation.md)
+
+---
+
+## Quick start
+
+### Option 1: Google Colab (fastest demo)
+Open [`colab/MedicalCodingAI_Colab.ipynb`](colab/MedicalCodingAI_Colab.ipynb) or follow [colab/COLAB_COMMANDS.md](colab/COLAB_COMMANDS.md). The notebook loads the reference data, builds the search index and launches the workbench UI with a public link.
+
+### Option 2: Docker (full platform)
 
 ```bash
-python scripts/setup_env.py           # creates .env with generated secrets; asks for your OpenRouter key
+python scripts/setup_env.py            # creates .env with generated secrets
 docker compose up -d --build
-docker compose logs -f migrate         # wait for "knowledge base ready" (first run: 5-10 min)
+docker compose logs -f migrate         # wait for "knowledge base ready" (first run: 5–10 min)
 ```
 
-First boot runs migrations, loads ICD-10-CM and builds the vector index (a few minutes). Then:
+| Service | URL |
+|---|---|
+| Review UI | http://localhost:3000 |
+| API documentation | http://localhost:8000/docs |
+| n8n automation | http://localhost:5678 |
 
-- Review UI: http://localhost:3000 (sign in with the admin email and password printed by `setup_env.py`)
-- API docs (non-production): http://localhost:8000/docs
-- n8n: http://localhost:5678
-
-Create a coder and an integration key:
+Create a coder account and an integration key:
 
 ```bash
 docker compose exec api python -m app.cli create-user coder@example.org --role coder
 docker compose exec api python -m app.cli create-api-key n8n --role service
 ```
 
-In n8n, create a **Header Auth** credential named `Medical Coding API key` (header `X-API-Key`, value = the key above), open the two imported workflows, select that credential on the HTTP nodes, and activate them. Documents can then be sent to `POST http://localhost:5678/webhook/clinical-document` (multipart field `file`).
+For production, `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` adds TLS termination (Caddy) and removes directly published ports. See [docs/operations.md](docs/operations.md).
 
-Production: `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` adds Caddy TLS termination and removes directly published ports. See [docs/operations.md](docs/operations.md).
+> The Colab workflow is the most thoroughly tested path for demos. Verify the Docker deployment in your environment before production use.
 
-## Local development
+### Option 3: Local development
 
 ```bash
 cd backend
 pip install -e ".[dev,kb,embeddings]"
 export DATABASE_URL=postgresql+psycopg://medcoding:medcoding@localhost:5432/medcoding
 alembic upgrade head
-python -m app.cli kb bootstrap            # load ICD-10-CM + build vector index
-python -m app.cli create-user you@example.org --role admin
-uvicorn app.main:app --reload             # API on :8000
-python -m app.worker                      # background jobs
-
-cd ../frontend && npm ci && BACKEND_URL=http://localhost:8000 npm run dev   # UI on :3000
-```
-
-Without an OpenRouter key, `LLM_PROVIDER=heuristic` runs the full pipeline with the deterministic retrieval-only coder, which is useful for development and as a baseline.
-
-Load your reference files (see `data_sources/README.md`):
-
-```bash
-python -m app.cli kb load-all --data-dir ../data_sources [--i-have-a-cpt-license]
+python -m app.cli kb load-all --data-dir ../data_sources
 python -m app.cli kb index --system all
-python -m app.cli kb freshness --dos 2026-10-01
-python -m app.cli code-note ../data/sample_notes/01_office_visit_knee_injection.txt --sex M --age 67
+python -m app.cli create-user you@example.org --role admin
+uvicorn app.main:app --reload            # API on :8000
+python -m app.worker                     # background jobs
 python -m app.demo.gradio_app            # workbench UI on :7860
 ```
 
-Tests: `cd backend && pytest` (80 tests; set `TEST_POSTGRES_URL` to also run the Postgres-specific tests).
+Without an LLM key, set `LLM_PROVIDER=heuristic` to run the complete pipeline with the deterministic coder.
 
-## Evaluation
+**Useful commands**
 
 ```bash
-cd backend
-python -m app.evaluation.runner --split dev --baselines all
-python -m app.evaluation.runner --split validation --calibrate calibration.json   # fit weights + threshold
-CALIBRATION_FILE=calibration.json python -m app.evaluation.runner --split test --out test-report.json
+python -m app.cli kb freshness --dos 2026-10-01          # are code sets valid for this date of service?
+python -m app.cli code-note ../data/sample_notes/01_office_visit_knee_injection.txt --sex M --age 67
+python -m app.cli claims scrub claim.json                # pre-bill check for a claim
+pytest                                                   # 77 pass, 3 need a Postgres test server
 ```
 
-Claim scrubber: `python -m app.evaluation.claims_eval` (26 labeled claims, `data/evaluation/claims_scrub_cases.jsonl`).
+---
 
-Current results for the **no-LLM retrieval-only baseline** on the synthetic dataset (36 notes, 71 gold codes). The test split was run once, after all tuning was done on dev/validation:
+## Reference data
 
-| Split | Precision | Recall | F1 | Category F1 | Exact match | Unsupported codes | Retrieval recall |
-|---|---|---|---|---|---|---|---|
-| dev (tuned on) | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 0% | 100% |
-| validation | 0.88 | 0.88 | 0.88 | 0.96 | 0.83 | 0% | 96% |
-| **test (held out)** | **0.92** | **0.96** | **0.94** | 1.00 | 0.92 | 0% | 100% |
+The platform loads official CMS/CDC files in their published formats. Each set carries a validity window, and the platform flags any code set that is not valid for a claim's date of service.
 
-(Lexical-only retrieval, as in `docs/evaluation/test-report-retrieval-only-postfix.json`; unchanged by the procedure/claims release, so no regression. On Colab with BGE embeddings, re-run step 10 of the notebook to measure the hybrid configuration.)
+| Source | Content |
+|---|---|
+| ICD-10-CM (CDC/CMS) | Codes, billability, instructional notes (Excludes1/2, code first, use additional code) |
+| ICD-10-PCS (CMS) | Inpatient procedure codes (supported when `icd10pcs_codes_<year>.txt` is added to `data_sources/`) |
+| HCPCS Level II (CMS) | Codes, modifiers, coverage codes, termination dates, processing notes |
+| NCCI MUE / PTP (CMS) | Unit-of-service limits (included) and procedure-to-procedure bundling edits (supported; add the CMS PTP file) |
+| Official Guidelines (CMS/NCHS) | ICD-10-CM guideline passages (included) and ICD-10-PCS passages (add the PCS guidelines PDF) |
+| CPT® (AMA) | Loaded only from a licensed file; **no CPT content is distributed** with this repository. CPT suggestions are limited to the codes in the licensed file you load |
 
-LLM baselines need `LLM_PROVIDER=openrouter` and were not run in the build environment. Details, error analysis and the calibration procedure: [docs/evaluation.md](docs/evaluation.md).
+See [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md) for the full inventory, update schedule and download links.
 
-## Project layout
+---
+
+## Project structure
 
 ```
-backend/            FastAPI service, worker, CLI, Alembic migrations, tests
-  app/ingestion     extraction, cleaning, sections, encrypted storage
-  app/extraction    lexicon, problem-list parser, ConText, LLM reconciliation
-  app/knowledge     ICD-10-CM tabular parser, HCPCS/CPT loaders, versioned KB
-  app/rag           embeddings, Qdrant/memory stores, BM25, hybrid retriever
-  app/llm           OpenRouter client, schemas, versioned prompts
-  app/coding        concept grouping, derived codes, engine, coding models
-  app/validation    deterministic rule engine, evidence matching
-  app/confidence    scorer, calibration
-  app/evaluation    baselines, metrics, error analysis
-  app/services      pipeline, review, audit, jobs, webhooks
-frontend/           Next.js 16 review workspace (BFF proxy, httpOnly session)
-n8n/workflows/      importable n8n workflows
-data/evaluation/    synthetic dataset splits (dev / validation / test) + labeled claims for the scrubber
-data/sample_notes/  synthetic notes with procedures (office injection, inpatient lap chole, laceration)
-data_sources/       your CMS/CDC reference files (FY2026 / Q3 2026)
-colab/              Colab notebook + command list
-  (backend) app/claims       pre-bill claim scrubber
-  (backend) app/knowledge    + cms_loaders, edits (MUE/PTP/notes), guidelines, loader_service
-  (backend) app/coding       + procedures (CPT/HCPCS/PCS)
-  (backend) app/demo         code_note service + Gradio workbench
-scripts/            dataset builder
-docs/               architecture, security & compliance, operations, evaluation
+backend/                 FastAPI service, worker, CLI, migrations, tests
+  app/ingestion          document extraction, cleaning, sections, encrypted storage
+  app/extraction         clinical lexicon, problem-list parser, ConText, LLM reconciliation
+  app/knowledge          code-set loaders (CMS/CDC formats), claim edits, guidelines index
+  app/rag                embeddings, vector stores, BM25, hybrid retriever
+  app/llm                LLM client, schemas, versioned prompts
+  app/coding             diagnosis and procedure coding engine
+  app/validation         deterministic rule engine, evidence matching
+  app/confidence         confidence scoring and calibration
+  app/claims             pre-bill claim scrubber
+  app/evaluation         baselines, metrics, error analysis
+  app/services           pipeline, review, audit, jobs, webhooks
+  app/demo               workbench UI (HTML/CSS) and PDF reports
+frontend/                Next.js review workspace
+n8n/workflows/           document intake and event automation workflows
+data/                    synthetic evaluation data and sample notes
+data_sources/            official reference files
+colab/                   Colab notebook and commands
+docs/                    architecture, security, operations, evaluation, data sources
 ```
 
-## Important
+---
 
-This software is decision support for certified coders, not an autonomous coding system. Before processing real patient data, establish the applicable legal and compliance requirements for your market (for example HIPAA and a BAA with every processor, including your LLM provider), run a security review, and validate accuracy on your own de-identified data and specialties. CPT® is a registered trademark of the American Medical Association; use CPT content only under a valid license.
+## Security and compliance
+
+- Role-based access control (admin, coder, auditor, service); only human coders can approve codes
+- Encryption of PHI columns and stored documents at rest, with key rotation
+- Hashed API keys, bcrypt passwords, login rate limiting, security headers
+- Hash-chained audit log (on PostgreSQL, a database trigger also blocks edits and deletions)
+- PHI-free application logs and webhooks
+- Full traceability of model, prompt, retrieval and knowledge-base versions for every suggestion
+
+See [docs/security-compliance.md](docs/security-compliance.md).
+
+> **Important.** This software is decision support for certified coders, not an autonomous coding system. Before processing real patient data, establish the legal and compliance requirements for your market (for example, HIPAA and a Business Associate Agreement with every processor, including any LLM provider), complete a security review, and validate accuracy on your own de-identified data. CPT® is a registered trademark of the American Medical Association; use CPT content only under a valid license.
+
+---
+
+## Contact
+
+<div align="center">
+
+<img src="backend/app/demo/assets/logo_wordmark.png" alt="AAXIS AI" width="200">
+
+**AAXIS AI Automations**: intelligent automation for healthcare revenue cycles
+
+📞 **+92 314 7357980** · ✉️ **aliumair64488@gmail.com**
+
+Interested in a live demo or a pilot on your own charts? Get in touch.
+
+</div>
